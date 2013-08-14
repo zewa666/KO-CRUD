@@ -1,0 +1,60 @@
+﻿<#@ template debug="false" hostspecific="true" language="C#" #>
+<#@include file="Manager.ttinclude" #>
+<# var manager = Manager.Create(Host, GenerationEnvironment); #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="$(SolutionDir)DemoTest\bin\Debug\DemoTest.exe" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Reflection" #>
+<#@ import namespace="DemoTest.Models" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ output extension=".html" #>
+ 
+<#
+var list = new List<Type>();
+	
+foreach (Type type in System.Reflection.Assembly.GetAssembly(typeof(KO_BaseModel)).GetTypes())
+{
+	if (type.IsAbstract) continue;	// only generate JS viewmodels for non-abstract classes
+    if (type.IsSubclassOf(typeof(KO_BaseModel)))
+		list.Add(type);
+}
+
+foreach (var type in list)
+{
+manager.StartNewFile(type.Name + ".html");
+#>
+<form class="form-<#= type.Name #>" action="#">
+<#
+foreach (var prop in type.GetProperties())
+{ 
+	System.Attribute[] attrs = System.Attribute.GetCustomAttributes(prop, typeof(CRUDPresentationAttribute));
+	CRUDPresentationAttribute PropAttrs = (attrs.Count() > 0) ? (CRUDPresentationAttribute)attrs[0] : null;
+	if(PropAttrs != null)
+	{
+#>
+	<label><# if(PropAttrs.Label == null) { #><#= prop.Name #><# } else { #><#= PropAttrs.Label #><# } #></label>
+<# } #>
+	<input type="text" data-bind="<# if(PropAttrs == null || PropAttrs.KOBinding == "BindToSelf") { #>value: <#= prop.Name #><# } #>" />
+<#}#>
+<#foreach (var method in type.GetMethods(BindingFlags.DeclaredOnly | BindingFlags.Instance | BindingFlags.Public))
+{
+    if (method.Name.StartsWith("set_") || method.Name.StartsWith("get_"))
+        continue;
+
+    System.Attribute[] attrs = System.Attribute.GetCustomAttributes(method, typeof(ModelMethodDescriber));
+	ModelMethodDescriber MethodAttr = (attrs.Count() > 0) ? (ModelMethodDescriber)attrs[0] : null;
+
+	attrs = System.Attribute.GetCustomAttributes(method, typeof(CRUDPresentationAttribute));
+	CRUDPresentationAttribute CRUDAttr = (attrs.Count() > 0) ? (CRUDPresentationAttribute)attrs[0] : null;
+
+	if(MethodAttr != null && MethodAttr.DisplayMode == ModelMethodDisplayMode.DisplayAsSubmit) {
+#>
+	<a class="btn btn-primary" data-bind="click: <#= method.Name #>"><# if(CRUDAttr == null || CRUDAttr.Label == null) { #><#= method.Name #><# } else { #><#= CRUDAttr.Label #><# } #></a>
+<# }
+} #>
+</form>
+<# 
+manager.EndBlock();
+}
+manager.Process(true);#>
